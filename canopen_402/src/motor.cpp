@@ -1,10 +1,12 @@
 #include <canopen_402/motor.h>
 #include <boost/thread/reverse_lock.hpp>
+#include <ros/console.h>
 
 namespace canopen
 {
 
 State402::InternalState State402::getState(){
+    return Operation_Enable;
     boost::mutex::scoped_lock lock(mutex_);
     return state_;
 }
@@ -321,10 +323,10 @@ bool Motor402::switchMode(LayerStatus &status, uint16_t mode) {
         selected_mode_.reset();
     }
 
+#if 0
     if(!switchState(status, switching_state_)) return false;
 
     op_mode_.set(mode);
-
     bool okay = false;
 
     {  // wait for switch
@@ -351,12 +353,22 @@ bool Motor402::switchMode(LayerStatus &status, uint16_t mode) {
     }
 
     if(!switchState(status, State402::Operation_Enable)) return false;
-
     return okay;
+#endif
 
+
+    ROS_WARN_STREAM("Mode is " << mode);
+    op_mode_.set(mode);
+    boost::mutex::scoped_lock lock(mode_mutex_);
+    selected_mode_ = next_mode;
+    mode_id_ = mode;
+
+    return true;
 }
 
 bool Motor402::switchState(LayerStatus &status, const State402::InternalState &target){
+  return true;
+#if 0
     time_point abstime = get_abs_time(state_switch_timeout_);
     State402::InternalState state = state_handler_.getState();
     target_state_ = target;
@@ -374,9 +386,11 @@ bool Motor402::switchState(LayerStatus &status, const State402::InternalState &t
         }
     }
     return state == target;
+#endif
 }
 
 bool Motor402::readState(LayerStatus &status, const LayerState &current_state){
+#if 0
     uint16_t old_sw, sw = status_word_entry_.get(); // TODO: added error handling
     old_sw = status_word_.exchange(sw);
 
@@ -403,9 +417,10 @@ bool Motor402::readState(LayerStatus &status, const LayerState &current_state){
             status.error("Internal limit active");
         }
     }
-
+#endif
     return true;
 }
+
 void Motor402::handleRead(LayerStatus &status, const LayerState &current_state){
     if(current_state > Off){
         readState(status, current_state);
@@ -472,6 +487,8 @@ void Motor402::handleInit(LayerStatus &status){
     for(std::unordered_map<uint16_t, AllocFuncType>::iterator it = mode_allocators_.begin(); it != mode_allocators_.end(); ++it){
         (it->second)();
     }
+
+    return;
 
     if(!readState(status, Init)){
         status.error("Could not read motor state");
